@@ -1,0 +1,16 @@
+{
+  "name": "lulula-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "irc-framework": "^4.14.0",
+    "twilio": "^5.13.1",
+    "ws": "^8.18.0"
+  }
+}

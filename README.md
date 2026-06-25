@@ -1,26 +1,31 @@
-# Lulula
+# La Señal · Minatitlán
 
-**La cerdita viral. Chat, juegos, caos.**
+**Un ritual diario.** Cada noche a las **21:00** (CDMX), una pregunta. **60 segundos.** Una palabra. Minatitlán responde.
 
-Lulula es la mascota — logo, icono de app y guía del arcade + chat IRC.
-
-**La jugada:** WhatsApp abre la puerta. mIRC es el motor. **LA SEÑAL OINK** es el alma — cada 5 min el planeta pide UNA palabra en IRC. 60 segundos. Sin segunda oportunidad.
-
-## Quick start
+## Correr
 
 ```bash
+npm install && cd server && npm install && cd ..
 npm run dev
-# http://127.0.0.1:8082/login  (puerto 8082 — evita choque con otros proyectos Expo)
+# http://127.0.0.1:8082
 ```
 
-## Opinión de IA
+`npm run dev` activa `SIGNAL_TEST_MODE` — ciclo completo cada **3 minutos** para probar sin esperar a las 9pm.
 
-Para pedir feedback a ChatGPT, Claude u otra IA → lee **[AI_REVIEW.md](./AI_REVIEW.md)** (documento maestro con prompts listos).
+Producción:
 
-## Arcade
+```bash
+SIGNAL_HOUR=21 npm run server
+```
 
-Lulula Verse · Lulula Craft · Oink Us · Fall Oink · Lulula Run
+## Opcional
 
-## Monetización
+- `DATABASE_URL` + `pg` → guarda cada Señal en tabla `senales`
+- `SIGNAL_TEST_MODE=true` → ciclo de prueba cada 3 min
 
-Oink Coins 🪙 · Perlas 💎 · Game Pass · Tienda `/shop`
+## Una pantalla
+
+1. ¿Cómo te llamas?
+2. Cuenta regresiva → LIVE → tarjeta compartible
+
+Sin IRC. Sin teléfono. Sin tabs.

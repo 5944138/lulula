@@ -1,6 +1,6 @@
 {
-  "name": "lulula-server",
-  "version": "1.0.0",
+  "name": "lulula-signal-server",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,9 +8,9 @@
     "dev": "node --watch index.js"
   },
   "dependencies": {
-    "dotenv": "^17.4.2",
-    "irc-framework": "^4.14.0",
-    "twilio": "^5.13.1",
     "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "pg": "^8.13.0"
   }
 }

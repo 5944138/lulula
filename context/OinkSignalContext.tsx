@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
 import {
   createContext,
   useCallback,
@@ -11,277 +10,231 @@ import {
   type ReactNode,
 } from 'react';
 
-import {
-  getQuestionForSlot,
-  getSignalPhase,
-  getSignalSlot,
-  msUntilSignal,
-  parseSignalWord,
-  pickCityWord,
-  secLeftInPhase,
-  SIGNAL_LIVE_SEC,
-  SIGNAL_SHARE,
-  simulateGlobalWinner,
-  type SignalPhase,
-  type SignalQuestion,
-} from '@/constants/oinkSignal';
-import { getCity } from '@/constants/world';
+import { WS_URL } from '@/constants/config';
+import type { SenalResult, SignalPhase, TopWord } from '@/constants/senal';
 import { STORAGE_KEYS } from '@/constants/storage';
-import { useEconomy } from '@/context/EconomyContext';
-import { useIdentity } from '@/context/IdentityContext';
-import { useIRC } from '@/context/IRCContext';
 
-export type SignalResult = {
-  cityWord: string;
-  cityVotes: number;
-  globalWord: string;
-  globalCity: string;
-  globalVotes: number;
-  won: boolean;
-  question: SignalQuestion;
-};
-
-export type SignalHistoryEntry = {
-  word: string;
-  city: string;
-  slot: number;
-  at: number;
-};
-
-type OinkSignalContextValue = {
+type SignalContextValue = {
+  nick: string;
+  nickReady: boolean;
+  connected: boolean;
   phase: SignalPhase;
-  question: SignalQuestion;
-  secLeft: number;
-  msUntilNext: number;
-  cityTally: Record<string, number>;
-  leadingWord: string;
+  secondsToSignal: number;
+  secondsLeft: number;
+  livePlayers: number;
+  question: string;
+  signalDate: string;
   yourWord: string | null;
-  result: SignalResult | null;
-  history: SignalHistoryEntry[];
-  signalsJoined: number;
-  dropOpen: boolean;
-  openDrop: () => void;
-  closeDrop: () => void;
-  dismissReveal: () => void;
-  submitWord: (text: string) => void;
-  cityName: string;
+  yourWordCount: number;
+  topWords: TopWord[];
+  winningWord: string | null;
+  winningCount: number;
+  totalPlayers: number;
+  yesterday: SenalResult | null;
+  today: SenalResult | null;
+  testMode: boolean;
+  error: string | null;
+  setNick: (nick: string) => Promise<void>;
+  submitWord: (word: string) => void;
 };
 
-const OinkSignalContext = createContext<OinkSignalContextValue | null>(null);
+const SignalContext = createContext<SignalContextValue | null>(null);
 
-export function OinkSignalProvider({ children }: { children: ReactNode }) {
-  const { cityId, cityName } = useIdentity();
-  const { nick, getChannel, sendChannel } = useIRC();
-  const { grantCoins } = useEconomy();
+export function SignalProvider({ children }: { children: ReactNode }) {
+  const wsRef = useRef<WebSocket | null>(null);
+  const nickRef = useRef('');
 
-  const [phase, setPhase] = useState<SignalPhase>('dormant');
-  const [secLeft, setSecLeft] = useState(0);
-  const [msUntilNext, setMsUntilNext] = useState(0);
-  const [cityTally, setCityTally] = useState<Record<string, number>>({});
+  const [nick, setNickState] = useState('');
+  const [nickReady, setNickReady] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [phase, setPhase] = useState<SignalPhase>('countdown');
+  const [secondsToSignal, setSecondsToSignal] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [livePlayers, setLivePlayers] = useState(0);
+  const [question, setQuestion] = useState('');
+  const [signalDate, setSignalDate] = useState('');
   const [yourWord, setYourWord] = useState<string | null>(null);
-  const [result, setResult] = useState<SignalResult | null>(null);
-  const [history, setHistory] = useState<SignalHistoryEntry[]>([]);
-  const [signalsJoined, setSignalsJoined] = useState(0);
-  const [dropOpen, setDropOpen] = useState(false);
+  const [yourWordCount, setYourWordCount] = useState(0);
+  const [topWords, setTopWords] = useState<TopWord[]>([]);
+  const [winningWord, setWinningWord] = useState<string | null>(null);
+  const [winningCount, setWinningCount] = useState(0);
+  const [totalPlayers, setTotalPlayers] = useState(0);
+  const [yesterday, setYesterday] = useState<SenalResult | null>(null);
+  const [today, setToday] = useState<SenalResult | null>(null);
+  const [testMode, setTestMode] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const slotRef = useRef(0);
-  const tallyRef = useRef(new Map<string, number>());
-  const processedRef = useRef(new Set<string>());
-  const revealedRef = useRef(false);
-  const autoOpenedRef = useRef(false);
-
-  const city = cityId ? getCity(cityId) : null;
-
-  useEffect(() => {
-    AsyncStorage.multiGet([STORAGE_KEYS.signalHistory, STORAGE_KEYS.signalsJoined]).then(([h, j]) => {
-      if (h[1]) {
-        try {
-          setHistory(JSON.parse(h[1]));
-        } catch {
-          /* noop */
-        }
-      }
-      if (j[1]) setSignalsJoined(Number(j[1]) || 0);
-    });
+  const applyReveal = useCallback((msg: Record<string, unknown>) => {
+    setPhase('reveal');
+    setQuestion(String(msg.question ?? ''));
+    setSignalDate(String(msg.fecha ?? ''));
+    setTopWords((msg.topWords as TopWord[]) ?? []);
+    setWinningWord((msg.winningWord as string) ?? null);
+    setWinningCount(Number(msg.winningCount ?? 0));
+    setTotalPlayers(Number(msg.totalPlayers ?? 0));
+    setYourWord((msg.yourWord as string) ?? null);
+    setYourWordCount(Number(msg.yourWordCount ?? 0));
   }, []);
 
-  const leadingWord = useMemo(() => {
-    const entries = Object.entries(cityTally);
-    if (entries.length === 0) return '—';
-    entries.sort((a, b) => b[1] - a[1]);
-    return entries[0][0];
-  }, [cityTally]);
+  const connect = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
 
-  const addVote = useCallback((word: string, fromNick: string) => {
-    if (phase !== 'live') return;
-    const tally = tallyRef.current;
-    tally.set(word, (tally.get(word) ?? 0) + 1);
-    setCityTally(Object.fromEntries(tally));
-    if (fromNick === nick) setYourWord(word);
-  }, [phase, nick]);
-
-  const finalizeReveal = useCallback(() => {
-    if (revealedRef.current) return;
-    revealedRef.current = true;
-
-    const cityWord = pickCityWord(tallyRef.current);
-    const cityVotes = tallyRef.current.get(cityWord) ?? 0;
-    const q = getQuestionForSlot(slotRef.current);
-    const global = simulateGlobalWinner(slotRef.current, cityWord, cityVotes, cityName || 'Tu ciudad');
-    const won = global.city === (cityName || 'Tu ciudad');
-
-    const res: SignalResult = {
-      cityWord,
-      cityVotes,
-      globalWord: global.word,
-      globalCity: global.city,
-      globalVotes: global.globalVotes,
-      won,
-      question: q,
+    ws.onopen = () => {
+      setConnected(true);
+      setError(null);
+      if (nickRef.current) {
+        ws.send(JSON.stringify({ type: 'join', nick: nickRef.current }));
+      }
     };
 
-    setResult(res);
-    setPhase('reveal');
-    setDropOpen(true);
+    ws.onmessage = (ev) => {
+      let msg: Record<string, unknown>;
+      try {
+        msg = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
 
-    const coins = won ? 60 : cityVotes > 0 ? 20 : 5;
-    grantCoins(coins);
-    Haptics.notificationAsync(
-      won ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
-    );
+      if (msg.type === 'state') {
+        setPhase(msg.phase as SignalPhase);
+        setSecondsToSignal(Number(msg.secondsToSignal ?? 0));
+        setSecondsLeft(Number(msg.secondsLeft ?? 0));
+        setLivePlayers(Number(msg.livePlayers ?? 0));
+        if (msg.question) setQuestion(String(msg.question));
+        if (msg.signalDate) setSignalDate(String(msg.signalDate));
+        setYesterday((msg.yesterday as SenalResult) ?? null);
+        setToday((msg.today as SenalResult) ?? null);
+        setTestMode(Boolean(msg.testMode));
+        if (msg.phase === 'live' || msg.phase === 'aviso') {
+          setYourWord(null);
+          setYourWordCount(0);
+        }
+        if (msg.phase === 'resultado' && msg.today) {
+          const t = msg.today as SenalResult;
+          setWinningWord(t.winningWord);
+          setWinningCount(t.winningCount);
+          setTopWords(t.topWords);
+          setTotalPlayers(t.totalPlayers);
+          setQuestion(t.question);
+        }
+      }
 
-    const entry: SignalHistoryEntry = {
-      word: global.word,
-      city: global.city,
-      slot: slotRef.current,
-      at: Date.now(),
+      if (msg.type === 'reveal') {
+        applyReveal(msg);
+        setPhase('reveal');
+        setSecondsLeft(Number(msg.secondsLeft ?? 0));
+      }
+
+      if (msg.type === 'ack') {
+        setYourWord(String(msg.word));
+        setError(null);
+      }
+
+      if (msg.type === 'joined') {
+        setNickState(String(msg.nick));
+      }
+
+      if (msg.type === 'error') {
+        setError(String(msg.message));
+      }
     };
-    const nextHistory = [entry, ...history].slice(0, 12);
-    setHistory(nextHistory);
 
-    const joined = signalsJoined + (cityVotes > 0 ? 1 : 0);
-    setSignalsJoined(joined);
+    ws.onclose = () => {
+      setConnected(false);
+      setTimeout(connect, 2000);
+    };
 
-    AsyncStorage.multiSet([
-      [STORAGE_KEYS.signalHistory, JSON.stringify(nextHistory)],
-      [STORAGE_KEYS.signalsJoined, String(joined)],
-    ]);
-
-    if (city) {
-      const tag = won ? '🏆 SEÑAL OINK' : '📡 SEÑAL OINK';
-      sendChannel(
-        city.channel,
-        `${tag} · Palabra del planeta: "${global.word.toUpperCase()}" — ${global.city} · ${global.globalVotes.toLocaleString()} almas`,
-      );
-    }
-  }, [city, cityName, grantCoins, history, sendChannel, signalsJoined]);
+    ws.onerror = () => ws.close();
+  }, [applyReveal]);
 
   useEffect(() => {
-    const tick = () => {
-      const now = Date.now();
-      const slot = getSignalSlot(now);
-      const p = getSignalPhase(now);
-
-      if (slot !== slotRef.current) {
-        slotRef.current = slot;
-        tallyRef.current = new Map();
-        processedRef.current = new Set();
-        revealedRef.current = false;
-        autoOpenedRef.current = false;
-        setCityTally({});
-        setYourWord(null);
-        setResult(null);
+    AsyncStorage.getItem(STORAGE_KEYS.nick).then((v) => {
+      if (v) {
+        nickRef.current = v;
+        setNickState(v);
+        setNickReady(true);
       }
+      connect();
+    });
+    return () => wsRef.current?.close();
+  }, [connect]);
 
-      setPhase(p);
-      setSecLeft(secLeftInPhase(now));
-      setMsUntilNext(msUntilSignal(now));
-
-      if (p === 'countdown' && !autoOpenedRef.current) {
-        autoOpenedRef.current = true;
-        setDropOpen(true);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      }
-
-      if (p === 'reveal' && !revealedRef.current) {
-        finalizeReveal();
-      }
-    };
-
-    tick();
-    const id = setInterval(tick, 500);
-    return () => clearInterval(id);
-  }, [finalizeReveal]);
-
-  useEffect(() => {
-    if (!city || phase !== 'live') return;
-    const room = getChannel(city.channel);
-    if (!room) return;
-
-    for (const msg of room.messages) {
-      const key = `sig-${msg.id}`;
-      if (processedRef.current.has(key)) continue;
-      const word = parseSignalWord(msg.text);
-      if (!word) continue;
-      processedRef.current.add(key);
-      addVote(word, msg.nick ?? 'anon');
+  const setNick = useCallback(async (value: string) => {
+    const clean = value.trim().slice(0, 24);
+    if (clean.length < 2) {
+      setError('Escribe al menos 2 letras');
+      return;
     }
-  }, [addVote, city, getChannel, phase]);
+    nickRef.current = clean;
+    setNickState(clean);
+    setNickReady(true);
+    await AsyncStorage.setItem(STORAGE_KEYS.nick, clean);
+    wsRef.current?.send(JSON.stringify({ type: 'join', nick: clean }));
+    setError(null);
+  }, []);
 
-  const submitWord = useCallback(
-    (text: string) => {
-      const word = parseSignalWord(text.startsWith('/senal') ? text : `/senal ${text}`);
-      if (!word || !city) return;
-      addVote(word, nick);
-      sendChannel(city.channel, `/senal ${word}`);
-    },
-    [addVote, city, nick, sendChannel],
-  );
+  const submitWord = useCallback((raw: string) => {
+    const word = raw.trim();
+    if (!word) return;
+    wsRef.current?.send(JSON.stringify({ type: 'submit', word }));
+  }, []);
 
   const value = useMemo(
-    (): OinkSignalContextValue => ({
+    (): SignalContextValue => ({
+      nick,
+      nickReady,
+      connected,
       phase,
-      question: getQuestionForSlot(slotRef.current),
-      secLeft,
-      msUntilNext,
-      cityTally,
-      leadingWord,
+      secondsToSignal,
+      secondsLeft,
+      livePlayers,
+      question,
+      signalDate,
       yourWord,
-      result,
-      history,
-      signalsJoined,
-      dropOpen,
-      openDrop: () => setDropOpen(true),
-      closeDrop: () => setDropOpen(false),
-      dismissReveal: () => {
-        setDropOpen(false);
-        setResult(null);
-        setPhase(getSignalPhase());
-      },
+      yourWordCount,
+      topWords,
+      winningWord,
+      winningCount,
+      totalPlayers,
+      yesterday,
+      today,
+      testMode,
+      error,
+      setNick,
       submitWord,
-      cityName: cityName || '',
     }),
     [
+      nick,
+      nickReady,
+      connected,
       phase,
-      secLeft,
-      msUntilNext,
-      cityTally,
-      leadingWord,
+      secondsToSignal,
+      secondsLeft,
+      livePlayers,
+      question,
+      signalDate,
       yourWord,
-      result,
-      history,
-      signalsJoined,
-      dropOpen,
+      yourWordCount,
+      topWords,
+      winningWord,
+      winningCount,
+      totalPlayers,
+      yesterday,
+      today,
+      testMode,
+      error,
+      setNick,
       submitWord,
-      cityName,
     ],
   );
 
-  return <OinkSignalContext.Provider value={value}>{children}</OinkSignalContext.Provider>;
+  return <SignalContext.Provider value={value}>{children}</SignalContext.Provider>;
 }
 
-export function useOinkSignal() {
-  const ctx = useContext(OinkSignalContext);
-  if (!ctx) throw new Error('useOinkSignal must be used within OinkSignalProvider');
+export function useSignal() {
+  const ctx = useContext(SignalContext);
+  if (!ctx) throw new Error('useSignal within SignalProvider');
   return ctx;
 }

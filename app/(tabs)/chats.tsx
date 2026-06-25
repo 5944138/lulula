@@ -5,11 +5,17 @@ import { Ionicons } from '@expo/vector-icons';
 
 import WhatsAppChatHeader from '@/components/whatsapp/WhatsAppChatHeader';
 import WhatsAppChatRow from '@/components/whatsapp/WhatsAppChatRow';
+import WireHero from '@/components/wire/WireHero';
 import { VIRAL_GAMES } from '@/constants/games/catalog';
 import { WA } from '@/constants/whatsappTheme';
 import { getCity, GLOBAL_CHANNELS } from '@/constants/world';
 import { useIdentity } from '@/context/IdentityContext';
 import { useIRC } from '@/context/IRCContext';
+import { useOinkDimension } from '@/context/OinkDimensionContext';
+import { useSnoutCast } from '@/context/SnoutCastContext';
+import { useGlitchPig } from '@/context/GlitchPigContext';
+import { useCollectiveMind } from '@/context/CollectiveMindContext';
+import { useOinkSignal } from '@/context/OinkSignalContext';
 import { channelKey } from '@/lib/irc/utils';
 
 function formatTime(time?: string) {
@@ -35,12 +41,83 @@ type ChatListItem = {
 export default function ChatsScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const { channels, pms, connectionState, joinChannel, getChannel } = useIRC();
-  const { cityId, cityName } = useIdentity();
+  const { channels, pms, joinChannel, getChannel } = useIRC();
+  const { cityId } = useIdentity();
+  const { filled, possession } = useOinkDimension();
+  const { active: snoutLive, broadcaster } = useSnoutCast();
+  const { phase: glitchPhase, oracle } = useGlitchPig();
+  const { phase: mindPhase, desire, progress, secLeft, openArena } = useCollectiveMind();
+  const { phase: signalPhase, secLeft: signalSec, openDrop } = useOinkSignal();
   const city = cityId ? getCity(cityId) : null;
 
   const pinned = useMemo((): ChatListItem[] => {
     const rows: ChatListItem[] = [];
+    if (signalPhase === 'countdown' || signalPhase === 'live') {
+      rows.push({
+        id: 'signal',
+        title: '📡 SEÑAL OINK',
+        subtitle:
+          signalPhase === 'live'
+            ? `UNA palabra en IRC · ${signalSec}s — el planeta escucha`
+            : `La señal llega en ${signalSec}s — no te la pierdas`,
+        time: 'DROP',
+        unread: 1,
+        avatarEmoji: '📡',
+        pinned: true,
+        online: true,
+        onPress: () => openDrop(),
+      });
+    }
+    if (mindPhase === 'active' || mindPhase === 'whisper') {
+      rows.push({
+        id: 'collective-mind',
+        title: `${desire.emoji} MENTE COLECTIVA`,
+        subtitle: `${desire.label} · ${secLeft}s · ${progress}/100 — el mundo te necesita en IRC`,
+        time: 'LIVE',
+        unread: 1,
+        avatarEmoji: desire.emoji,
+        pinned: true,
+        online: true,
+        onPress: () => openArena(),
+      });
+    }
+    if (glitchPhase === 'invaded') {
+      rows.push({
+        id: 'glitch',
+        title: '👾 CERDO GLITCH',
+        subtitle: '¡Tu ciudad debe escribir L-U-L-U-L-A en el IRC!',
+        time: 'ALERTA',
+        unread: 1,
+        avatarEmoji: '👾',
+        pinned: true,
+        onPress: () => router.push('/glitch-pig' as '/games/lola-run'),
+      });
+    }
+    rows.push({
+      id: 'snoutcast',
+      title: snoutLive ? `🎙️ EN VIVO · ${broadcaster}` : '🎙️ SnoutCast',
+      subtitle: snoutLive
+        ? 'Radio pirata de tu ciudad — tap para entrar'
+        : 'Escribe /hog en tu sala y toma el aire 90s',
+      time: snoutLive ? 'LIVE' : 'ÚNICO',
+      unread: snoutLive ? 1 : 0,
+      avatarEmoji: '🎙️',
+      pinned: true,
+      online: snoutLive,
+      onPress: () => router.push('/snoutcast' as '/games/lola-run'),
+    });
+    rows.push({
+      id: 'dimension',
+      title: '🌀 La Dimensión Oink',
+      subtitle: possession.active
+        ? '👁 Lulula te posee — entra ahora'
+        : `${filled} px · 🔮 ${oracle.slice(0, 40)}…`,
+      time: 'ÚNICO',
+      unread: possession.active ? 1 : 0,
+      avatarEmoji: '🌀',
+      pinned: true,
+      onPress: () => router.push('/dimension' as '/games/lola-run'),
+    });
     rows.push({
       id: 'lulula',
       title: 'Lulula',
@@ -84,7 +161,13 @@ export default function ChatsScreen() {
       },
     });
     return rows;
-  }, [city, getChannel, joinChannel, router]);
+  }, [city, getChannel, joinChannel, router, filled, possession.active, snoutLive, broadcaster, glitchPhase, oracle, mindPhase, desire, progress, secLeft, openArena, signalPhase, signalSec, openDrop]);
+
+  const joinCity = () => {
+    if (!city) return;
+    joinChannel(city.channel);
+    router.push(`/channel/${channelKey(city.channel)}`);
+  };
 
   const dynamic = useMemo((): ChatListItem[] => {
     const ch = channels
@@ -137,27 +220,21 @@ export default function ChatsScreen() {
     return list.filter((x) => x.title.toLowerCase().includes(q) || x.subtitle.toLowerCase().includes(q));
   }, [pinned, arcade, dynamic, search]);
 
-  const statusColor = connectionState === 'connected' ? WA.teal : WA.textSecondary;
-  const statusText =
-    connectionState === 'connected' ? `Conectado · ${cityName || 'wire'}` : 'Conectando al wire mIRC…';
-
   return (
     <View style={styles.root}>
       <WhatsAppChatHeader
-        title="Lulula"
+        title="El Wire"
         onSearch={setSearch}
         searchValue={search}
         rightAction={() => router.push('/(tabs)/profile')}
       />
 
-      <View style={styles.statusBar}>
-        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-        <Text style={styles.statusText}>{statusText}</Text>
-      </View>
+      <WireHero onJoinCity={joinCity} />
 
       <FlatList
         data={all}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={null}
         renderItem={({ item }) => (
           <WhatsAppChatRow
             title={item.title}
@@ -187,18 +264,6 @@ export default function ChatsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: WA.panel },
-  statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: WA.header,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: WA.border,
-  },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 12, color: WA.textSecondary, fontFamily: 'Courier' },
   empty: { padding: 40, alignItems: 'center' },
   emptyText: { color: WA.textSecondary },
   fab: {

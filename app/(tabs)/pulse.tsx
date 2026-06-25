@@ -9,6 +9,11 @@ import LevelBar from '@/components/gamification/LevelBar';
 import StreakFlame from '@/components/gamification/StreakFlame';
 import LivePulse from '@/components/LivePulse';
 import MircWindow from '@/components/mirc/MircWindow';
+import { useOinkWave } from '@/context/OinkWaveContext';
+import { useOinkDimension } from '@/context/OinkDimensionContext';
+import { useGlitchPig } from '@/context/GlitchPigContext';
+import { useSnoutCast } from '@/context/SnoutCastContext';
+import { useCollectiveMind } from '@/context/CollectiveMindContext';
 import { getDailyGreeting } from '@/constants/lulula';
 import {
   CITY_RIVALS,
@@ -38,6 +43,11 @@ export default function PulseScreen() {
     recordSala3pm,
     recordInvite,
   } = useGamification();
+  const { phase, challenge, wavesPlayed, enterArena, countdownSec, liveSecLeft } = useOinkWave();
+  const { filled, cityMessagesToday } = useOinkDimension();
+  const { active: snoutLive, claimAir, broadcaster } = useSnoutCast();
+  const { oracle, phase: glitchPhase, openArena } = useGlitchPig();
+  const { phase: mindPhase, desire, progress, secLeft, mega, streak: mindStreak, lululaWhisper, openArena: openMind } = useCollectiveMind();
 
   const daily = useMemo(() => getDailyQuestion(), []);
   const lolaGreeting = useMemo(() => getDailyGreeting(), []);
@@ -75,6 +85,89 @@ export default function PulseScreen() {
               </Text>
             </View>
           </View>
+
+          <View style={styles.oracleCard}>
+            <Text style={styles.oracleLabel}>🔮 OINK ORACLE</Text>
+            <Text style={styles.oracleText}>{oracle}</Text>
+            <Pressable onPress={() => router.push('/glitch-pig' as '/games/lola-run')}>
+              <Text style={styles.oracleLink}>Cerdo Glitch →</Text>
+            </Pressable>
+          </View>
+
+          {glitchPhase === 'invaded' && (
+            <Pressable style={styles.glitchAlert} onPress={openArena}>
+              <Text style={styles.glitchAlertText}>👾 GLITCH INVADIÓ TU CIUDAD — SALVAR</Text>
+            </Pressable>
+          )}
+
+          {(mindPhase === 'active' || mindPhase === 'whisper') && (
+            <Pressable
+              style={[styles.mindCard, { borderColor: desire.color }]}
+              onPress={openMind}>
+              <Text style={[styles.mindBadge, { backgroundColor: desire.color }]}>
+                {mega ? '⚡ MEGA' : '🌍 LIVE'} · {secLeft}s
+              </Text>
+              <Text style={[styles.mindTitle, { color: desire.color }]}>
+                {desire.emoji} MENTE COLECTIVA
+              </Text>
+              <Text style={styles.mindSub}>{lululaWhisper}</Text>
+              <Text style={styles.mindStat}>
+                {progress}/100 resonancia · racha {mindStreak} · /deseo en IRC
+              </Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            style={styles.mindIdleCard}
+            onPress={() => router.push('/collective-mind' as '/games/lola-run')}>
+            <Text style={styles.mindIdleBadge}>🧠 ÚNICO EN EL MUNDO</Text>
+            <Text style={styles.mindIdleTitle}>MENTE COLECTIVA</Text>
+            <Text style={styles.mindIdleSub}>
+              El planeta susurra un deseo cada 7 min. Tu IRC es la respuesta.
+            </Text>
+          </Pressable>
+
+          <Pressable style={styles.oinkWaveCard} onPress={enterArena}>
+            <Text style={styles.oinkWaveBadge}>
+              {phase === 'live' ? '🔴 EN VIVO' : phase === 'countdown' ? `⏳ ${countdownSec}s` : '✨ ÚNICO'}
+            </Text>
+            <Text style={styles.oinkWaveTitle}>🌊 OINK WAVE</Text>
+            <Text style={styles.oinkWaveSub}>
+              {challenge
+                ? `${challenge.title} — tu chat IRC es el juego multijugador`
+                : 'Cada 5 min: tu ciudad pelea en el wire. Nadie más hace esto.'}
+            </Text>
+            <Text style={styles.oinkWaveStat}>
+              {wavesPlayed} waves jugadas
+              {phase === 'live' ? ` · ${liveSecLeft}s restantes` : ''}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.snoutCard, snoutLive && styles.snoutLive]}
+            onPress={() => router.push('/snoutcast' as '/games/lola-run')}>
+            <Text style={styles.snoutBadge}>{snoutLive ? '🔴 LIVE' : '🎙️ ÚNICO'}</Text>
+            <Text style={styles.snoutTitle}>SNOUTCAST</Text>
+            <Text style={styles.snoutSub}>
+              {snoutLive
+                ? `${broadcaster} tiene el hocico — entra o manda 🐷`
+                : 'Un micrófono. Una ciudad. Comando: /hog'}
+            </Text>
+            {!snoutLive && (
+              <Pressable style={styles.snoutClaim} onPress={claimAir}>
+                <Text style={styles.snoutClaimText}>TOMAR EL AIRE</Text>
+              </Pressable>
+            )}
+          </Pressable>
+
+          <Pressable style={styles.dimensionCard} onPress={() => router.push('/dimension' as '/games/lola-run')}>
+            <Text style={styles.dimBadge}>🌀 EXCLUSIVO LULULA</Text>
+            <Text style={styles.dimTitle}>LA DIMENSIÓN OINK</Text>
+            <Text style={styles.dimSub}>
+              {filled} píxeles pintados · {cityMessagesToday} msgs hoy{'\n'}
+              Cada mensaje IRC deja huella en el universo paralelo
+            </Text>
+          </Pressable>
 
           <View style={[styles.pulseCard, onlineCount > 0 && styles.pulseLive]}>
             <View style={styles.pulseRow}>
@@ -165,6 +258,128 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
   levelWrap: { flex: 1, gap: 6 },
   identity: { fontSize: 11, fontFamily: 'Courier', color: MircColors.neonCyan },
+  oinkWaveCard: {
+    padding: 16,
+    backgroundColor: '#FF00AA22',
+    borderWidth: 3,
+    borderColor: '#FF00AA',
+    gap: 6,
+  },
+  oinkWaveBadge: {
+    alignSelf: 'flex-start',
+    fontSize: 10,
+    fontFamily: 'Courier',
+    fontWeight: 'bold',
+    color: '#000',
+    backgroundColor: MircColors.neonPink,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  oinkWaveTitle: {
+    fontSize: 20,
+    fontFamily: 'Courier',
+    fontWeight: 'bold',
+    color: MircColors.neonPink,
+  },
+  oinkWaveSub: { fontSize: 12, fontFamily: 'Courier', color: MircColors.textLight, lineHeight: 18 },
+  oinkWaveStat: { fontSize: 10, fontFamily: 'Courier', color: MircColors.neonCyan, marginTop: 4 },
+  dimensionCard: {
+    padding: 16,
+    backgroundColor: '#1a0033',
+    borderWidth: 3,
+    borderColor: '#BF00FF',
+    gap: 6,
+  },
+  dimBadge: {
+    alignSelf: 'flex-start',
+    fontSize: 10,
+    fontFamily: 'Courier',
+    fontWeight: 'bold',
+    color: '#000',
+    backgroundColor: '#BF00FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  dimTitle: {
+    fontSize: 18,
+    fontFamily: 'Courier',
+    fontWeight: 'bold',
+    color: '#BF00FF',
+  },
+  dimSub: { fontSize: 11, fontFamily: 'Courier', color: MircColors.textLight, lineHeight: 17 },
+  snoutCard: {
+    padding: 16,
+    backgroundColor: '#2a0015',
+    borderWidth: 3,
+    borderColor: '#FF4466',
+    gap: 6,
+  },
+  snoutLive: { borderColor: '#FF0000', backgroundColor: '#3a0018' },
+  snoutBadge: {
+    alignSelf: 'flex-start',
+    fontSize: 10,
+    fontFamily: 'Courier',
+    fontWeight: 'bold',
+    color: '#000',
+    backgroundColor: '#FF4466',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  snoutTitle: { fontSize: 20, fontFamily: 'Courier', fontWeight: 'bold', color: '#FF4466' },
+  snoutSub: { fontSize: 11, fontFamily: 'Courier', color: MircColors.textLight, lineHeight: 17 },
+  snoutClaim: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    backgroundColor: '#FF00AA',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  snoutClaimText: { fontSize: 11, fontFamily: 'Courier', fontWeight: 'bold', color: '#fff' },
+  oracleCard: {
+    padding: 14,
+    backgroundColor: '#1a0a20',
+    borderWidth: 2,
+    borderColor: '#BF00FF',
+    gap: 6,
+  },
+  oracleLabel: { fontSize: 10, fontFamily: 'Courier', fontWeight: 'bold', color: '#BF00FF' },
+  oracleText: { fontSize: 13, fontFamily: 'Courier', color: MircColors.textLight, fontStyle: 'italic', lineHeight: 19 },
+  oracleLink: { fontSize: 10, fontFamily: 'Courier', color: MircColors.neonCyan, marginTop: 4 },
+  glitchAlert: {
+    padding: 14,
+    backgroundColor: '#FF0044',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  glitchAlertText: { fontSize: 13, fontFamily: 'Courier', fontWeight: 'bold', color: '#fff', textAlign: 'center' },
+  mindCard: {
+    padding: 16,
+    backgroundColor: '#0a0a18',
+    borderWidth: 3,
+    gap: 6,
+  },
+  mindBadge: {
+    alignSelf: 'flex-start',
+    fontSize: 10,
+    fontFamily: 'Courier',
+    fontWeight: 'bold',
+    color: '#000',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  mindTitle: { fontSize: 20, fontFamily: 'Courier', fontWeight: 'bold' },
+  mindSub: { fontSize: 11, fontFamily: 'Courier', color: MircColors.textLight, lineHeight: 17, fontStyle: 'italic' },
+  mindStat: { fontSize: 10, fontFamily: 'Courier', color: MircColors.neonCyan, marginTop: 4 },
+  mindIdleCard: {
+    padding: 14,
+    backgroundColor: '#0a1020',
+    borderWidth: 2,
+    borderColor: '#00E5FF',
+    gap: 4,
+  },
+  mindIdleBadge: { fontSize: 9, fontFamily: 'Courier', fontWeight: 'bold', color: '#00E5FF' },
+  mindIdleTitle: { fontSize: 16, fontFamily: 'Courier', fontWeight: 'bold', color: '#00E5FF' },
+  mindIdleSub: { fontSize: 10, fontFamily: 'Courier', color: MircColors.textMuted, lineHeight: 15 },
   pulseCard: {
     alignItems: 'center',
     padding: 20,

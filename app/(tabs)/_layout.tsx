@@ -4,12 +4,20 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import AutoConnect from '@/components/AutoConnect';
 import ConnectionBanner from '@/components/ConnectionBanner';
+import OinkWaveBanner from '@/components/oinkwave/OinkWaveBanner';
+import SnoutCastLiveBar from '@/components/snoutcast/SnoutCastLiveBar';
+import GlitchPigBanner from '@/components/glitchpig/GlitchPigBanner';
+import WireSignalBanner from '@/components/oinksignal/WireSignalBanner';
 import { WA } from '@/constants/whatsappTheme';
 
 export default function TabLayout() {
   return (
     <View style={styles.root}>
       <ConnectionBanner />
+      <WireSignalBanner />
+      <SnoutCastLiveBar />
+      <GlitchPigBanner />
+      <OinkWaveBanner />
       <AutoConnect />
       <Tabs
         initialRouteName="chats"
@@ -23,7 +31,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="chats"
           options={{
-            title: 'Chats',
+            title: 'El Wire',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="chatbubbles" size={size} color={color} />
             ),

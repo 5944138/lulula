@@ -7,18 +7,25 @@ import { MircColors } from '@/constants/theme';
 type Props = {
   message: IRCMessage;
   myNick?: string;
+  onAirNick?: string | null;
 };
 
-export default function IRCMessageLine({ message, myNick }: Props) {
+export default function IRCMessageLine({ message, myNick, onAirNick }: Props) {
   const { time, type, nick, text } = message;
 
   if (type === 'chat' && nick) {
     const isMe = message.fromMe || nick === myNick;
+    const isOnAir = onAirNick && nick === onAirNick;
     return (
-      <View style={styles.line}>
+      <View style={[styles.line, isOnAir && styles.onAirLine]}>
         <Text style={styles.time}>[{time}]</Text>
+        {isOnAir && <Text style={styles.onAirBadge}>🎙️</Text>}
         <Text style={styles.bracket}> {'<'}</Text>
-        <Text style={[styles.nick, { color: isMe ? MircColors.neonPink : getNickColor(nick) }]}>
+        <Text
+          style={[
+            styles.nick,
+            { color: isOnAir ? '#FFAA00' : isMe ? MircColors.neonPink : getNickColor(nick) },
+          ]}>
           {nick}
         </Text>
         <Text style={styles.bracket}>{'>'} </Text>
@@ -92,4 +99,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier',
     flexShrink: 1,
   },
+  onAirLine: {
+    backgroundColor: '#FFAA0018',
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFAA00',
+    paddingLeft: 4,
+  },
+  onAirBadge: { fontSize: 11, marginRight: 2 },
 });

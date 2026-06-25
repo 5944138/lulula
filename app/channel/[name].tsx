@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import CollectiveMindBanner from '@/components/collectivemind/CollectiveMindBanner';
 import EmojiBar from '@/components/EmojiBar';
 import IRCMessageLine from '@/components/mirc/IRCMessageLine';
 import MircInput from '@/components/mirc/MircInput';
@@ -19,6 +20,7 @@ import NickList from '@/components/mirc/NickList';
 import WhatsAppConversationHeader from '@/components/whatsapp/WhatsAppConversationHeader';
 import { WA } from '@/constants/whatsappTheme';
 import { useGamification } from '@/context/GamificationContext';
+import { useSnoutCast } from '@/context/SnoutCastContext';
 import { useIRC } from '@/context/IRCContext';
 import { MircColors } from '@/constants/theme';
 import { decodeChannelKey } from '@/lib/irc/utils';
@@ -31,6 +33,7 @@ export default function ChannelScreen() {
   const channelName = decodeChannelKey(name ?? '');
   const { nick, getChannel, sendChannel, markChannelRead, joinChannel } = useIRC();
   const { recordMessage } = useGamification();
+  const { active: snoutLive, broadcaster } = useSnoutCast();
   const [input, setInput] = useState('');
 
   const room = getChannel(channelName);
@@ -76,6 +79,7 @@ export default function ChannelScreen() {
             📌 {room.topic}
           </Text>
         ) : null}
+        <CollectiveMindBanner />
 
         <KeyboardAvoidingView
           style={styles.flex}
@@ -86,7 +90,13 @@ export default function ChannelScreen() {
                 ref={listRef}
                 data={messages}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => <IRCMessageLine message={item} myNick={nick} />}
+                renderItem={({ item }) => (
+                  <IRCMessageLine
+                    message={item}
+                    myNick={nick}
+                    onAirNick={snoutLive ? broadcaster : null}
+                  />
+                )}
                 contentContainerStyle={styles.messageList}
                 onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
                 showsVerticalScrollIndicator
@@ -113,7 +123,7 @@ export default function ChannelScreen() {
               returnKeyType="send"
               autoCorrect={false}
               autoCapitalize="none"
-              placeholder={`Mensaje en ${channelName} — /me para acciones`}
+              placeholder={`${channelName} — /senal palabra · /hog · /deseo · /me`}
             />
           </View>
 
